@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Разводка — Петроградка</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
+<style>
+  /* Layout: full-screen map, panel on the left (desktop) or bottom sheet (phone) */
+  :root {
+    --bg: #f3f5f9; --panel: #ffffff; --fg: #14213d; --muted: #5d6b85; --line: #dde3ee;
+    --accent: #1d4ed8; --free: #16a34a; --paid: #dc2626; --unknown: #8a94a8; --private: #b45309;
+    --font: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b1424; --panel: #111d33; --fg: #e8eefb; --muted: #93a3c0; --line: #22324f;
+      --accent: #f5c542; --free: #34d399; --paid: #f87171; --unknown: #8a94a8; --private: #fbbf24;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font); }
+  .app { display: grid; grid-template-columns: 380px 1fr; height: 100%; }
+  #map { height: 100%; min-height: 0; }
+  .panel { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .head { padding: 16px; display: grid; gap: 12px; border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: baseline; gap: 8px; }
+  .brand h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+  .brand span { color: var(--muted); font-size: 13px; }
+  form { display: flex; gap: 8px; }
+  input[type=text] { flex: 1; min-width: 0; padding: 12px 14px; font: inherit; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { font: inherit; cursor: pointer; }
+  .go { padding: 0 16px; border: 0; border-radius: 10px; background: var(--accent); color: var(--panel); font-weight: 700; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chip { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--fg); font-size: 13px; }
+  .chip[aria-pressed=true] { background: var(--fg); color: var(--panel); border-color: var(--fg); }
+  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin-right: 4px; }
+  .status { color: var(--muted); font-size: 13px; }
+  .summary { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
+  .summary b { font-variant-numeric: tabular-nums; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+  .list { overflow-y: auto; flex: 1; min-height: 0; }
+  .item { display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .item:hover, .item.active { background: var(--bg); }
+  .item .bar { border-radius: 4px; }
+  .item h3 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+  .item p { margin: 0; color: var(--muted); font-size: 12.5px; }
+  .item .dist { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .item .dist small { display: block; color: var(--muted); font-weight: 400; }
+  .empty { padding: 24px 16px; color: var(--muted); }
+  .note { padding: 10px 16px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+  .leaflet-popup-content { font: 13px/1.45 var(--font); }
+  .leaflet-popup-content b { font-size: 14px; }
+  .pop a { color: #1d4ed8; font-weight: 700; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 45% 55%; }
+    .panel { order: 2; border-right: 0; border-top: 1px solid var(--line); }
+    #map { order: 1; }
+    .head { padding: 12px max(16px, env(safe-area-inset-left)); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <div class="head">
+      <div class="brand"><h1>Разводка</h1><span>парковки Петроградского района</span></div>
+      <form id="search">
+        <input id="addr" type="text" placeholder="Адрес, например Большой пр. П.С. 50" value="м. Петроградская" autocomplete="off">
+        <button class="go" type="submit">Найти</button>
+      </form>
+      <div class="row" id="places"><span class="label">Рядом с</span></div>
+      <div class="row">
+        <span class="label">Радиус</span>
+        <button class="chip" data-r="500" aria-pressed="true">500 м</button>
+        <button class="chip" data-r="1000" aria-pressed="false">1 км</button>
+        <button class="chip" data-r="2000" aria-pressed="false">2 км</button>
+      </div>
+      <div class="row">
+        <span class="label">Показать</span>
+        <button class="chip" data-f="all" aria-pressed="true">Все</button>
+        <button class="chip" data-f="free" aria-pressed="false">Бесплатные</button>
+        <button class="chip" data-f="paid" aria-pressed="false">Платные</button>
+      </div>
+      <div class="summary" id="summary"></div>
+      <div class="status" id="status">Введите адрес или кликните по карте</div>
+    </div>
+    <div class="list" id="list"></div>
+    <div class="note">Локальная выгрузка OpenStreetMap на 24.10.2026: 899 парковок Петроградского района. У части нет данных об оплате. Перед парковкой проверяйте знаки.</div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="parkings.js"></script>
+<script>
+const COLORS = () => {
+  const s = getComputedStyle(document.documentElement);
+  return { free: s.getPropertyValue('--free').trim(), paid: s.getPropertyValue('--paid').trim(),
+           unknown: s.getPropertyValue('--unknown').trim(), private: s.getPropertyValue('--private').trim() };
+};
+const STATUS_TEXT = { free: 'Бесплатно', paid: 'Платно', unknown: 'Оплата неизвестна', private: 'Закрытая / для своих' };
+const TYPE_TEXT = { surface: 'открытая площадка', 'multi-storey': 'многоуровневая', underground: 'подземная',
+  street_side: 'вдоль улицы', lane: 'на проезжей части', rooftop: 'на крыше', garage_boxes: 'гаражи', carports: 'навесы' };
+
+const state = { radius: 500, filter: 'all', center: null, items: [], markers: new Map() };
+const BBOX = [59.945, 30.205, 59.990, 30.342]; // south, west, north, east of the downloaded area
+const PLACES = [
+  ['м. Петроградская', 59.9664, 30.3115], ['м. Горьковская', 59.9561, 30.3189],
+  ['м. Чкаловская', 59.9610, 30.2918], ['м. Спортивная', 59.9502, 30.2884],
+  ['м. Крестовский остров', 59.9718, 30.2595], ['Газпром Арена', 59.9730, 30.2210]
+];
+
+const map = L.map('map', { zoomControl: true }).setView([59.9640, 30.2900], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+let centerMarker = null, radiusCircle = null;
+
+const $ = id => document.getElementById(id);
+const setStatus = t => $('status').textContent = t;
+
+function haversine(a, b) {
+  const R = 6371000, toR = d => d * Math.PI / 180;
+  const dLat = toR(b[0] - a[0]), dLon = toR(b[1] - a[1]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toR(a[0])) * Math.cos(toR(b[0])) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function classify(t) {
+  if (['private', 'no'].includes(t.access)) return 'private';
+  if (t.fee === 'no') return 'free';
+  if (t.fee === 'yes' || t.fee === 'paid' || t.charge) return 'paid';
+  return 'unknown';
+}
+
+async function geocode(q) {
+  const query = /петербург|спб|питер/i.test(q) ? q : q + ', Санкт-Петербург';
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ru'
+    + '&viewbox=29.4,60.25,30.8,59.6&bounded=1&accept-language=ru&q=' + encodeURIComponent(query);
+  let r;
+  try { r = await fetch(url, { signal: AbortSignal.timeout(8000) }); }
+  catch (e) { throw new Error('Поиск адреса недоступен без интернета. Выберите точку ниже или кликните по карте.'); }
+  if (!r.ok) throw new Error('Геокодер не ответил (' + r.status + '). Выберите точку ниже или кликните по карте.');
+  const data = await r.json();
+  if (!data.length) throw new Error('Адрес не найден в Петербурге. Попробуйте написать иначе.');
+  const g = { lat: +data[0].lat, lon: +data[0].lon, label: data[0].display_name.split(',').slice(0, 3).join(',') };
+  if (g.lat < BBOX[0] || g.lat > BBOX[2] || g.lon < BBOX[1] || g.lon > BBOX[3])
+    throw new Error('Адрес вне Петроградского района. Пока у нас есть данные только по нему.');
+  return g;
+}
+
+// Parkings come from the local parkings.js snapshot (OSM, Petrogradsky district)
+async function fetchParkings(lat, lon, r) {
+  if (!window.PARKINGS) throw new Error('Не загрузился файл parkings.js рядом со страницей.');
+  return window.PARKINGS.map(t => ({
+    id: t.id, lat: t.lat, lon: t.lon, tags: t, status: classify(t),
+    name: t.name || t.addr || (TYPE_TEXT[t.parking] ? 'Парковка, ' + TYPE_TEXT[t.parking] : 'Парковка'),
+    dist: haversine([lat, lon], [t.lat, t.lon])
+  })).filter(p => p.dist <= r).sort((a, b) => a.dist - b.dist);
+}
+
+function details(p) {
+  const t = p.tags, parts = [STATUS_TEXT[p.status]];
+  if (t.parking && TYPE_TEXT[t.parking]) parts.push(TYPE_TEXT[t.parking]);
+  if (t.capacity) parts.push(t.capacity + ' мест');
+  if (t.access === 'customers') parts.push('для клиентов');
+  if (t.maxstay) parts.push('макс. ' + t.maxstay);
+  return parts.join(' · ');
+}
+
+function fmtDist(m) { return m < 1000 ? Math.round(m) + ' м' : (m / 1000).toFixed(1) + ' км'; }
+
+function popupHtml(p) {
+  const t = p.tags;
+  const route = `https://yandex.ru/maps/?rtext=~${p.lat},${p.lon}&rtt=auto`;
+  return `<div class="pop"><b></b><br>${details(p)}<br>${fmtDist(p.dist)} от адреса, ~${Math.max(1, Math.round(p.dist / 80))} мин пешком`
+    + (t.opening_hours ? `<br>Часы: ${t.opening_hours.replace(/</g, '')}` : '')
+    + `<br><a href="${route}" target="_blank" rel="noopener">Маршрут в Яндекс Картах →</a></div>`;
+}
+
+function render() {
+  const c = COLORS();
+  layer.clearLayers(); state.markers.clear();
+  const shown = state.items.filter(p => state.filter === 'all' || p.status === state.filter);
+  const counts = { free: 0, paid: 0, unknown: 0, private: 0 };
+  state.items.forEach(p => counts[p.status]++);
+  $('summary').innerHTML = state.items.length ? ['free', 'paid', 'unknown', 'private'].map(k =>
+    `<span><i class="dot" style="background:${c[k]}"></i><b>${counts[k]}</b> ${{ free: 'бесплатных', paid: 'платных', unknown: 'неизвестно', private: 'закрытых' }[k]}</span>`).join('') : '';
+
+  shown.forEach(p => {
+    const m = L.circleMarker([p.lat, p.lon], { radius: 8, color: '#fff', weight: 2, fillColor: c[p.status], fillOpacity: 1 });
+    m.bindPopup(popupHtml(p));
+    m.on('popupopen', e => { e.popup.getElement().querySelector('b').textContent = p.name; highlight(p.id); });
+    m.addTo(layer); state.markers.set(p.id, m);
+  });
+
+  const list = $('list'); list.innerHTML = '';
+  if (!shown.length && state.center && !state.error && state.token && $('status').textContent !== 'Ищу парковки рядом…') {
+    list.innerHTML = `<div class="empty">В радиусе ${fmtDist(state.radius)} ничего не нашлось${state.filter !== 'all' ? ' с этим фильтром' : ''}. Увеличьте радиус.</div>`;
+  }
+  shown.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'item'; el.dataset.id = p.id;
+    el.innerHTML = `<div class="bar" style="background:${c[p.status]}"></div>
+      <div><h3></h3><p>${details(p)}</p></div>
+      <div class="dist">${fmtDist(p.dist)}<small>${Math.max(1, Math.round(p.dist / 80))} мин</small></div>`;
+    el.querySelector('h3').textContent = p.name;
+    el.onclick = () => { map.setView([p.lat, p.lon], 17); state.markers.get(p.id).openPopup(); };
+    list.appendChild(el);
+  });
+}
+
+function highlight(id) {
+  document.querySelectorAll('.item').forEach(el => el.classList.toggle('active', el.dataset.id === id));
+  document.querySelector(`.item[data-id="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+async function searchAt(lat, lon, label) {
+  state.center = { lat, lon, label };
+  if (centerMarker) centerMarker.remove();
+  if (radiusCircle) radiusCircle.remove();
+  centerMarker = L.marker([lat, lon]).addTo(map).bindTooltip(label || 'Точка поиска');
+  radiusCircle = L.circle([lat, lon], { radius: state.radius, color: '#1d4ed8', weight: 1, fillOpacity: 0.05 }).addTo(map);
+  map.fitBounds(radiusCircle.getBounds());
+  setStatus('Ищу парковки рядом…');
+  state.items = []; state.error = null; render();
+  const token = state.token = (state.token || 0) + 1;
+  let items = [], error = null;
+  try { items = await fetchParkings(lat, lon, state.radius); } catch (e) { error = e.message; }
+  if (token !== state.token) return; // a newer search started meanwhile
+  state.items = items; state.error = error;
+  setStatus(error || `${label ? label + ' · ' : ''}найдено ${items.length} парковок в радиусе ${fmtDist(state.radius)}`);
+  render();
+}
+
+$('search').addEventListener('submit', async e => {
+  e.preventDefault();
+  const q = $('addr').value.trim(); if (!q) return;
+  setStatus('Ищу адрес…');
+  try { const g = await geocode(q); await searchAt(g.lat, g.lon, g.label); }
+  catch (err) { setStatus(err.message); }
+});
+
+map.on('click', e => searchAt(e.latlng.lat, e.latlng.lng, 'Точка на карте'));
+
+document.querySelectorAll('[data-r]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-r]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  state.radius = +b.dataset.r;
+  if (state.center) searchAt(state.center.lat, state.center.lon, state.center.label);
+});
+document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-f]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  state.filter = b.dataset.f; render();
+});
+
+L.rectangle([[BBOX[0], BBOX[1]], [BBOX[2], BBOX[3]]], { color: '#8a94a8', weight: 1, dashArray: '4 4', fill: false, interactive: false }).addTo(map);
+
+PLACES.forEach(([name, lat, lon]) => {
+  const b = document.createElement('button');
+  b.className = 'chip'; b.type = 'button'; b.textContent = name;
+  b.onclick = () => { $('addr').value = name; searchAt(lat, lon, name); };
+  $('places').appendChild(b);
+});
+
+searchAt(PLACES[0][1], PLACES[0][2], PLACES[0][0]);
+</script>
+</body>
+</html>
