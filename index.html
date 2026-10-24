@@ -117,7 +117,7 @@ const PLACES = [
 ];
 
 const map = L.map('map', { zoomControl: true }).setView([59.9640, 30.2900], 14);
-map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+map.attributionControl.setPrefix(false);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '&copy; OpenStreetMap'
 }).addTo(map);
