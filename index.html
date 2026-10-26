@@ -91,7 +91,7 @@
       <div class="status" id="status">Введите адрес или кликните по карте</div>
     </div>
     <div class="list" id="list"></div>
-    <div class="note">Локальная выгрузка OpenStreetMap на 24.10.2026: 899 парковок Петроградского района. У части нет данных об оплате. Перед парковкой проверяйте знаки.</div>
+    <div class="note">Локальная выгрузка OpenStreetMap на 26.10.2026: 917 парковок Петроградского района. У части нет данных об оплате. Перед парковкой проверяйте знаки.</div>
   </aside>
   <div id="map"></div>
 </div>
@@ -107,6 +107,23 @@ const COLORS = () => {
 const STATUS_TEXT = { free: 'Бесплатно', paid: 'Платно', unknown: 'Оплата неизвестна', private: 'Закрытая / для своих' };
 const TYPE_TEXT = { surface: 'открытая площадка', 'multi-storey': 'многоуровневая', underground: 'подземная',
   street_side: 'вдоль улицы', lane: 'на проезжей части', rooftop: 'на крыше', garage_boxes: 'гаражи', carports: 'навесы' };
+const LOCATION_TEXT = {
+  street_side: '🛣️ Вдоль дороги / карман',
+  lane: '🛣️ На проезжей части',
+  surface: '🏡 Во дворе',
+  underground: '🏢 Подземный паркинг',
+  'multi-storey': '🏢 Многоуровневый паркинг',
+  rooftop: '🏢 На крыше',
+  garage_boxes: '🚪 Гаражи',
+  carports: '☂️ Навес'
+};
+
+function defaultName(t) {
+  if (t.parking === 'street_side' || t.parking === 'lane') return 'Парковка вдоль дороги';
+  if (t.parking === 'underground') return 'Подземный паркинг';
+  if (t.parking === 'multi-storey') return 'Многоуровневый паркинг';
+  return 'Парковка во дворе';
+}
 
 const state = { radius: 500, filter: 'all', center: null, items: [], markers: new Map() };
 const BBOX = [59.945, 30.205, 59.990, 30.342]; // south, west, north, east of the downloaded area
@@ -162,14 +179,15 @@ async function fetchParkings(lat, lon, r) {
   if (!window.PARKINGS) throw new Error('Не загрузился файл parkings.js рядом со страницей.');
   return window.PARKINGS.map(t => ({
     id: t.id, lat: t.lat, lon: t.lon, tags: t, status: classify(t),
-    name: t.name || t.addr || (TYPE_TEXT[t.parking] ? 'Парковка, ' + TYPE_TEXT[t.parking] : 'Парковка'),
+    name: t.name || t.addr || defaultName(t),
     dist: haversine([lat, lon], [t.lat, t.lon])
   })).filter(p => p.dist <= r).sort((a, b) => a.dist - b.dist);
 }
 
 function details(p) {
-  const t = p.tags, parts = [STATUS_TEXT[p.status]];
-  if (t.parking && TYPE_TEXT[t.parking]) parts.push(TYPE_TEXT[t.parking]);
+  const t = p.tags;
+  const loc = LOCATION_TEXT[t.parking] || '🏡 Во дворе';
+  const parts = [STATUS_TEXT[p.status], loc];
   if (t.capacity) parts.push(t.capacity + ' мест');
   if (t.access === 'customers') parts.push('для клиентов');
   if (t.maxstay) parts.push('макс. ' + t.maxstay);
@@ -181,8 +199,9 @@ function fmtDist(m) { return m < 1000 ? Math.round(m) + ' м' : (m / 1000).toFix
 function popupHtml(p) {
   const t = p.tags;
   const route = `https://yandex.ru/maps/?rtext=~${p.lat},${p.lon}&rtt=auto`;
+  const hours = t.hours || t.opening_hours;
   return `<div class="pop"><b></b><br>${details(p)}<br>${fmtDist(p.dist)} от адреса, ~${Math.max(1, Math.round(p.dist / 80))} мин пешком`
-    + (t.opening_hours ? `<br>Часы: ${t.opening_hours.replace(/</g, '')}` : '')
+    + (hours ? `<br>Часы: ${hours.replace(/</g, '')}` : '')
     + `<br><a href="${route}" target="_blank" rel="noopener">Маршрут в Яндекс Картах →</a></div>`;
 }
 

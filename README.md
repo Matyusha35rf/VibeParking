@@ -5,7 +5,7 @@
 ## Как устроено
 
 - `index.html` — вся страница: Leaflet + OpenStreetMap, без сборки и бэкенда.
-- `parkings.js` — локальная выгрузка 899 парковок (`amenity=parking`) из OpenStreetMap на 24.10.2026.
+- `parkings.js` — локальная выгрузка 917 парковок (`amenity=parking`) из OpenStreetMap на 26.10.2026.
 - Поиск адреса идёт через геокодер Nominatim, а подложка карты — через тайлы OSM. Для них нужен интернет.
 
 ## Запуск
