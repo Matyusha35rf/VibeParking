@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Разводка — Петроградка</title>
+<title>Разводка — Санкт-Петербург</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
@@ -57,6 +57,90 @@
   .leaflet-popup-content { font: 13px/1.45 var(--font); }
   .leaflet-popup-content b { font-size: 14px; }
   .pop a { color: #1d4ed8; font-weight: 700; }
+
+  .bridge-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .bridge-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--fg);
+    font: 700 13px/1.2 var(--font);
+    cursor: pointer;
+    user-select: none;
+    box-sizing: border-box;
+    width: 100%;
+    transition: background .15s, border-color .15s, transform .1s;
+  }
+  .bridge-btn:hover { background: var(--panel); border-color: var(--muted); }
+  .bridge-btn:active { transform: scale(0.98); }
+  .bridge-btn input[type="checkbox"] {
+    cursor: pointer; width: 15px; height: 15px; accent-color: var(--accent); margin: 0;
+  }
+
+  .bridge-marker {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 999px;
+    font: 700 11.5px/1.2 var(--font); color: #0f172a; /* Четкий черный/темный текст */
+    white-space: nowrap; cursor: pointer; user-select: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .bridge-marker:hover {
+    transform: scale(1.07); box-shadow: 0 3px 9px rgba(0,0,0,0.2);
+    z-index: 1000 !important;
+  }
+  .bridge-marker .b-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  /* Мягкие пастельные оттенки: не перекрывают черный текст */
+  .bridge-marker.closed, .bridge-marker.on-demand {
+    background: #ecfdf5; border: 1px solid #a7f3d0;
+  }
+  .bridge-marker.closed .b-dot, .bridge-marker.on-demand .b-dot {
+    background: #10b981;
+  }
+
+  .bridge-marker.drawn {
+    background: #fef2f2; border: 1px solid #fecaca;
+  }
+  .bridge-marker.drawn .b-dot {
+    background: #ef4444;
+  }
+
+  .bridge-marker.soon {
+    background: #fffbeb; border: 1px solid #fde68a;
+  }
+  .bridge-marker.soon .b-dot {
+    background: #f59e0b;
+  }
+
+  .bridge-marker.fixed {
+    background: #f8fafc; border: 1px solid #cbd5e1;
+  }
+  .bridge-marker.fixed .b-dot {
+    background: #64748b;
+  }
+  .bridge-div-icon { background: transparent; border: 0; }
+
+  @media (prefers-color-scheme: dark) {
+    .bridge-btn { background: #111d33; border-color: var(--line); color: var(--fg); }
+    .bridge-btn:hover { border-color: var(--muted); }
+    .bridge-marker { color: #f1f5f9; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
+    .bridge-marker.closed, .bridge-marker.on-demand { background: #064e3b55; border-color: #059669; }
+    .bridge-marker.drawn { background: #7f1d1d55; border-color: #dc2626; }
+    .bridge-marker.soon { background: #78350f55; border-color: #d97706; }
+    .bridge-marker.fixed { background: #1e293b; border-color: #475569; }
+  }
   @media (max-width: 760px) {
     .app { grid-template-columns: 1fr; grid-template-rows: 45% 55%; }
     .panel { order: 2; border-right: 0; border-top: 1px solid var(--line); }
@@ -69,9 +153,18 @@
 <div class="app">
   <aside class="panel">
     <div class="head">
-      <div class="brand"><h1>Разводка</h1><span>парковки Петроградского района</span></div>
+      <div class="brand"><h1>Разводка</h1><span>парковки Санкт-Петербурга</span></div>
+      <div class="bridge-actions">
+        <label class="bridge-btn" title="Показать или скрыть мосты на карте">
+          <input type="checkbox" id="toggle-bridges" checked>
+          <span>🌉 Мосты</span>
+        </label>
+        <button type="button" class="bridge-btn" id="zoom-bridges" title="Отдалить карту и показать все мосты района">
+          <span>🗺️ Обзор мостов</span>
+        </button>
+      </div>
       <form id="search">
-        <input id="addr" type="text" placeholder="Адрес, например Большой пр. П.С. 50" value="м. Петроградская" autocomplete="off">
+        <input id="addr" type="text" placeholder="Адрес, например Невский пр. 28 или Большой пр. П.С. 50" value="м. Петроградская" autocomplete="off">
         <button class="go" type="submit">Найти</button>
       </form>
       <div class="row" id="places"><span class="label">Рядом с</span></div>
@@ -91,13 +184,14 @@
       <div class="status" id="status">Введите адрес или кликните по карте</div>
     </div>
     <div class="list" id="list"></div>
-    <div class="note">Локальная выгрузка OpenStreetMap на 26.10.2026: 917 парковок Петроградского района. У части нет данных об оплате. Перед парковкой проверяйте знаки.</div>
+    <div class="note">Локальная выгрузка OpenStreetMap на 26.10.2026: 8 807 парковок Санкт-Петербурга. У части нет данных об оплате. Перед парковкой проверяйте знаки.</div>
   </aside>
   <div id="map"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="parkings.js"></script>
+<script src="bridges.js"></script>
 <script>
 const COLORS = () => {
   const s = getComputedStyle(document.documentElement);
@@ -126,11 +220,11 @@ function defaultName(t) {
 }
 
 const state = { radius: 500, filter: 'all', center: null, items: [], markers: new Map() };
-const BBOX = [59.945, 30.205, 59.990, 30.342]; // south, west, north, east of the downloaded area
+const BBOX = [59.63, 29.42, 60.25, 30.76]; // Границы города федерального значения Санкт-Петербург
 const PLACES = [
-  ['м. Петроградская', 59.9664, 30.3115], ['м. Горьковская', 59.9561, 30.3189],
-  ['м. Чкаловская', 59.9610, 30.2918], ['м. Спортивная', 59.9502, 30.2884],
-  ['м. Крестовский остров', 59.9718, 30.2595], ['Газпром Арена', 59.9730, 30.2210]
+  ['м. Гостиный двор', 59.9343, 30.3351], ['м. Петроградская', 59.9664, 30.3115],
+  ['м. Площадь Восстания', 59.9317, 30.3606], ['м. Василеостровская', 59.9427, 30.2782],
+  ['м. Московская', 59.8519, 30.3223], ['Газпром Арена', 59.9730, 30.2210]
 ];
 
 const map = L.map('map', { zoomControl: true }).setView([59.9640, 30.2900], 14);
@@ -139,7 +233,157 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 const layer = L.layerGroup().addTo(map);
+const bridgesLayer = L.layerGroup().addTo(map);
 let centerMarker = null, radiusCircle = null;
+
+function formatMins(m) {
+  const h = Math.floor(m / 60);
+  const min = m % 60;
+  if (h > 0) return `${h} ч ${min} мин`;
+  return `${min} мин`;
+}
+
+function getBridgeStatus(bridge, now) {
+  // 1. Неразводные мосты (24/7)
+  if (bridge.type === 'fixed' || !bridge.schedule || bridge.schedule.length === 0) {
+    return {
+      isOpenForCars: true,
+      isDrawn: false,
+      text: '🟢 Круглосуточно открыт',
+      subtext: 'Мост неразводной, проезд 24/7',
+      badgeClass: 'fixed'
+    };
+  }
+
+  // 2. Мосты через Большую Невку по предварительной спецзаявке
+  // В 99% ночей они НЕ разводятся и открыты для транспорта
+  if (bridge.type === 'on_demand') {
+    return {
+      isOpenForCars: true,
+      isDrawn: false,
+      text: '🟢 Обычно открыт всю ночь',
+      subtext: 'Разводка крайне редкая (только по спецзаявке судов)',
+      badgeClass: 'on-demand'
+    };
+  }
+
+  // 3. Зимний период (навигация закрыта)
+  const month = now.getMonth();
+  if (month < 3 || month > 10) {
+    return {
+      isOpenForCars: true,
+      isDrawn: false,
+      text: '🟢 Сведён (навигация закрыта)',
+      subtext: 'Зимой мосты не разводятся',
+      badgeClass: 'closed'
+    };
+  }
+
+  // 4. Регулярные разводные мосты (Троицкий, Биржевой, Тучков, Дворцовый)
+  const curMins = now.getHours() * 60 + now.getMinutes();
+
+  for (const [startStr, endStr] of bridge.schedule) {
+    const [sh, sm] = startStr.split(':').map(Number);
+    const [eh, em] = endStr.split(':').map(Number);
+    const startMins = sh * 60 + sm;
+    const endMins = eh * 60 + em;
+
+    if (curMins >= startMins && curMins < endMins) {
+      const left = endMins - curMins;
+      return {
+        isOpenForCars: false,
+        isDrawn: true,
+        text: '🔴 Разведён прямо сейчас',
+        subtext: `Проезд закрыт до ${endStr} (ещё ${formatMins(left)})`,
+        badgeClass: 'drawn'
+      };
+    }
+  }
+
+  let minDiff = Infinity;
+  let nextOpening = null;
+  for (const [startStr, endStr] of bridge.schedule) {
+    const [sh, sm] = startStr.split(':').map(Number);
+    let startMins = sh * 60 + sm;
+    if (startMins <= curMins) {
+      startMins += 24 * 60;
+    }
+    const diff = startMins - curMins;
+    if (diff < minDiff) {
+      minDiff = diff;
+      nextOpening = startStr;
+    }
+  }
+
+  const isSoon = minDiff <= 60;
+  return {
+    isOpenForCars: true,
+    isDrawn: false,
+    text: isSoon ? '⚠️ Скоро разводка' : '🟢 Сведён (проезд открыт)',
+    subtext: `Разводка в ${nextOpening} (через ${formatMins(minDiff)})`,
+    badgeClass: isSoon ? 'soon' : 'closed'
+  };
+}
+
+function bridgePopupHtml(bridge, status) {
+  const route = `https://yandex.ru/maps/?rtext=~${bridge.lat},${bridge.lon}&rtt=auto`;
+  const bg = status.isDrawn ? '#fef2f2' : (status.badgeClass === 'soon' ? '#fffbeb' : '#ecfdf5');
+  const fg = status.isDrawn ? '#991b1b' : (status.badgeClass === 'soon' ? '#92400e' : '#065f46');
+  const border = status.isDrawn ? '#fecaca' : (status.badgeClass === 'soon' ? '#fde68a' : '#a7f3d0');
+
+  let typeBadge = '';
+  if (bridge.type === 'regular') {
+    typeBadge = '<span style="font-size:11px;padding:2px 6px;border-radius:4px;background:#fee2e2;color:#991b1b;font-weight:700;">Каждую ночь</span>';
+  } else if (bridge.type === 'on_demand') {
+    typeBadge = '<span style="font-size:11px;padding:2px 6px;border-radius:4px;background:#e0f2fe;color:#0369a1;font-weight:700;">Почти всегда открыт</span>';
+  } else {
+    typeBadge = '<span style="font-size:11px;padding:2px 6px;border-radius:4px;background:#f3f4f6;color:#374151;font-weight:700;">24/7 не разводится</span>';
+  }
+
+  return `<div class="pop">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px;">
+      <b style="font-size:15px;">🌉 ${bridge.name}</b>
+      ${typeBadge}
+    </div>
+    <div style="padding:6px 10px;border-radius:8px;background:${bg};color:${fg};border:1px solid ${border};margin:6px 0 8px;font-size:12.5px;">
+      <b style="font-size:13px;">${status.text}</b><br>${status.subtext}
+    </div>
+    <div style="font-size:12.5px;line-height:1.45;">
+      Режим: <b>${bridge.scheduleText}</b><br>
+      <span style="color:var(--muted);">${bridge.connects}</span>
+    </div>
+    <div style="margin-top:8px;">
+      <a href="${route}" target="_blank" rel="noopener">Маршрут к мосту в Яндекс Картах →</a>
+    </div>
+  </div>`;
+}
+
+function updateBridges() {
+  if (!window.BRIDGES) return;
+  bridgesLayer.clearLayers();
+  const checkbox = $('toggle-bridges');
+  if (checkbox && !checkbox.checked) return;
+
+  const now = new Date();
+  window.BRIDGES.forEach(bridge => {
+    const status = getBridgeStatus(bridge, now);
+    const iconHtml = `<div class="bridge-marker ${status.badgeClass}">
+      <span class="b-dot"></span><span>${bridge.shortName || bridge.name}</span>
+    </div>`;
+
+    const icon = L.divIcon({
+      html: iconHtml,
+      className: 'bridge-div-icon',
+      iconSize: [null, null],
+      iconAnchor: [45, 14]
+    });
+
+    const popupContent = bridgePopupHtml(bridge, status);
+    const marker = L.marker([bridge.lat, bridge.lon], { icon, zIndexOffset: 500 });
+    marker.bindPopup(popupContent);
+    marker.addTo(bridgesLayer);
+  });
+}
 
 const $ = id => document.getElementById(id);
 const setStatus = t => $('status').textContent = t;
@@ -152,7 +396,7 @@ function haversine(a, b) {
 }
 
 function classify(t) {
-  if (['private', 'no'].includes(t.access)) return 'private';
+  if (['private', 'no', 'customers', 'permit'].includes(t.access)) return 'private';
   if (t.fee === 'no') return 'free';
   if (t.fee === 'yes' || t.fee === 'paid' || t.charge) return 'paid';
   return 'unknown';
@@ -170,7 +414,7 @@ async function geocode(q) {
   if (!data.length) throw new Error('Адрес не найден в Петербурге. Попробуйте написать иначе.');
   const g = { lat: +data[0].lat, lon: +data[0].lon, label: data[0].display_name.split(',').slice(0, 3).join(',') };
   if (g.lat < BBOX[0] || g.lat > BBOX[2] || g.lon < BBOX[1] || g.lon > BBOX[3])
-    throw new Error('Адрес вне Петроградского района. Пока у нас есть данные только по нему.');
+    throw new Error('Адрес вне Санкт-Петербурга. Поиск работает по территории города.');
   return g;
 }
 
@@ -187,9 +431,14 @@ async function fetchParkings(lat, lon, r) {
 function details(p) {
   const t = p.tags;
   const loc = LOCATION_TEXT[t.parking] || '🏡 Во дворе';
-  const parts = [STATUS_TEXT[p.status], loc];
+  let statusText = STATUS_TEXT[p.status];
+  if (t.access === 'customers') {
+    statusText = 'Закрытая (для клиентов)';
+  } else if (t.access === 'permit') {
+    statusText = 'Только по пропускам';
+  }
+  const parts = [statusText, loc];
   if (t.capacity) parts.push(t.capacity + ' мест');
-  if (t.access === 'customers') parts.push('для клиентов');
   if (t.maxstay) parts.push('макс. ' + t.maxstay);
   return parts.join(' · ');
 }
@@ -290,6 +539,24 @@ PLACES.forEach(([name, lat, lon]) => {
 });
 
 searchAt(PLACES[0][1], PLACES[0][2], PLACES[0][0]);
+updateBridges();
+setInterval(updateBridges, 30000);
+$('toggle-bridges')?.addEventListener('change', () => {
+  updateBridges();
+});
+$('zoom-bridges')?.addEventListener('click', () => {
+  const cb = $('toggle-bridges');
+  if (cb && !cb.checked) {
+    cb.checked = true;
+  }
+  updateBridges();
+  if (bridgesLayer.getLayers().length > 0) {
+    const group = L.featureGroup(bridgesLayer.getLayers());
+    map.fitBounds(group.getBounds().pad(0.08));
+  } else {
+    map.setView([59.9350, 30.3400], 12);
+  }
+});
 </script>
 </body>
 </html>
