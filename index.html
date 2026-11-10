@@ -101,7 +101,7 @@
       <div class="status" id="status">Введите адрес или кликните по карте</div>
     </div>
     <div class="list" id="list"></div>
-    <div class="note">OpenStreetMap на 26.10.2026: 8 807 парковок. В снимке нет Петергофа, Кронштадта, Сестрорецка, Пушкина и Колпино. У части точек нет данных об оплате. Перед парковкой проверяйте знаки.</div>
+    <div class="note">Точки — выгрузка OSM на 26.10.2026, 8 807 площадок. Стоянка у края проезжей части в неё почти не входит: вдоль Дальневосточного проспекта она показана линией, кроме субботы с 7:00 до 22:00. Перед парковкой проверяйте знаки.</div>
   </aside>
   <div id="map"></div>
 </div>
@@ -110,6 +110,7 @@
 <script src="parkings.js"></script>
 <script src="bridges.js"></script>
 <script src="boundary.js"></script>
+<script src="street-parking.js"></script>
 <script>
 const COLORS = () => {
   const s = getComputedStyle(document.documentElement);
@@ -153,6 +154,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 const layer = L.layerGroup().addTo(map);
 const bridgesLayer = L.layerGroup().addTo(map);
+const streetLayer = L.layerGroup();
+const streetLayers = new Map();
 let centerMarker = null, radiusCircle = null;
 
 const bridgeMarkers = new Map();
@@ -255,18 +258,69 @@ async function geocode(q) {
   return g;
 }
 
+function nearestOnStreet(lat, lon, street) {
+  const cos = Math.cos(lat * Math.PI / 180);
+  let best = { dist: Infinity, lat, lon };
+  street.lines.forEach(line => {
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1], b = line[i];
+      const ax = (a[1] - lon) * 111320 * cos, ay = (a[0] - lat) * 111320;
+      const bx = (b[1] - lon) * 111320 * cos, by = (b[0] - lat) * 111320;
+      const dx = bx - ax, dy = by - ay;
+      const len = dx * dx + dy * dy;
+      const t = len ? Math.max(0, Math.min(1, (-ax * dx - ay * dy) / len)) : 0;
+      const dist = Math.hypot(ax + dx * t, ay + dy * t);
+      if (dist < best.dist) best = { dist, lat: a[0] + (b[0] - a[0]) * t, lon: a[1] + (b[1] - a[1]) * t };
+    }
+  });
+  return best;
+}
+
+function drawStreetParking() {
+  if (!window.STREET_PARKING || !window.streetParkingStatus) return;
+  streetLayer.clearLayers();
+  streetLayers.clear();
+  window.STREET_PARKING.forEach(street => {
+    const live = window.streetParkingStatus(street);
+    const group = L.featureGroup();
+    street.lines.forEach(line => {
+      L.polyline(line, {
+        color: live.allowed ? '#15803d' : '#b45309',
+        weight: 6, opacity: 0.8, lineCap: 'round', bubblingMouseEvents: false
+      }).addTo(group);
+    });
+    group.bindPopup(`<div class="pop"><b>${street.name}</b><br>${live.text}<br>${live.detail}<br>Вдоль проезжей части</div>`);
+    group.addTo(streetLayer);
+    streetLayers.set(street.id, group);
+  });
+  if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
+}
+
 // Local OSM snapshot in parkings.js, dated 26.10.2026. Coverage is BBOX, not the whole city.
 async function fetchParkings(lat, lon, r) {
   if (!window.PARKINGS) throw new Error('Не загрузился файл parkings.js рядом со страницей.');
-  return window.PARKINGS.map(t => ({
+  const points = window.PARKINGS.map(t => ({
     id: t.id, lat: t.lat, lon: t.lon, tags: t, status: classify(t),
     name: t.name || t.addr || defaultName(t),
     dist: haversine([lat, lon], [t.lat, t.lon])
-  })).filter(p => p.dist <= r).sort((a, b) => a.dist - b.dist);
+  })).filter(p => p.dist <= r);
+  const streets = (window.STREET_PARKING || []).map(street => {
+    const near = nearestOnStreet(lat, lon, street);
+    return {
+      id: 'street:' + street.id, lat: near.lat, lon: near.lon, street,
+      tags: { parking: 'street_side', fee: 'no' }, status: 'free',
+      name: street.name, dist: near.dist
+    };
+  }).filter(p => p.dist <= r);
+  return points.concat(streets).sort((a, b) => a.dist - b.dist);
 }
 
 function details(p) {
   const t = p.tags;
+  if (p.street) {
+    const live = window.streetParkingStatus(p.street);
+    return [live.text, 'Вдоль дороги', live.detail].join(' · ');
+  }
   const loc = LOCATION_TEXT[t.parking] || (t.parking ? 'Парковка' : 'Тип не указан');
   const statusText = CLOSED_ACCESS[t.access] || STATUS_TEXT[p.status];
   const parts = [statusText, loc];
@@ -296,6 +350,7 @@ function render() {
     `<span><i class="dot" style="background:${c[k]}"></i><b>${counts[k]}</b> ${{ free: 'бесплатных', paid: 'платных', unknown: 'неизвестно', private: 'закрытых' }[k]}</span>`).join('') : '';
 
   shown.forEach(p => {
+    if (p.street) return;
     const m = L.circleMarker([p.lat, p.lon], { radius: 8, color: '#fff', weight: 2, fillColor: c[p.status], fillOpacity: 1 });
     m.bindPopup(popupHtml(p));
     m.on('popupopen', e => { e.popup.getElement().querySelector('b').textContent = p.name; highlight(p.id); });
@@ -309,11 +364,18 @@ function render() {
   shown.forEach(p => {
     const el = document.createElement('div');
     el.className = 'item'; el.dataset.id = p.id;
-    el.innerHTML = `<div class="bar" style="background:${c[p.status]}"></div>
+    const live = p.street ? window.streetParkingStatus(p.street) : null;
+    const bar = live && !live.allowed ? c.private : c[p.status];
+    el.innerHTML = `<div class="bar" style="background:${bar}"></div>
       <div><h3></h3><p>${details(p)}</p></div>
       <div class="dist">${fmtDist(p.dist)}<small>${Math.max(1, Math.round(p.dist / 80))} мин</small></div>`;
     el.querySelector('h3').textContent = p.name;
-    el.onclick = () => { map.setView([p.lat, p.lon], 17); state.markers.get(p.id).openPopup(); };
+    el.onclick = () => {
+      map.setView([p.lat, p.lon], p.street ? 16 : 17);
+      if (p.street) streetLayers.get(p.street.id).openPopup([p.lat, p.lon]);
+      else state.markers.get(p.id).openPopup();
+      highlight(p.id);
+    };
     list.appendChild(el);
   });
 }
@@ -377,6 +439,7 @@ PLACES.forEach(([name, lat, lon]) => {
 
 const startPlace = PLACES.find(([name]) => name === $('addr').value) || PLACES[0];
 searchAt(startPlace[1], startPlace[2], startPlace[0]);
+drawStreetParking();
 updateBridges();
 map.on('zoomend', () => {
   bridgeMarkers.forEach((marker, id) => {
@@ -385,7 +448,7 @@ map.on('zoomend', () => {
     if (bridge) marker.unbindTooltip().bindTooltip(bridge.shortName || bridge.name, bridgeLabelOptions());
   });
 });
-setInterval(updateBridges, 30000);
+setInterval(() => { updateBridges(); drawStreetParking(); }, 30000);
 $('toggle-bridges').addEventListener('click', () => {
   const button = $('toggle-bridges');
   const shown = button.getAttribute('aria-pressed') === 'true';
