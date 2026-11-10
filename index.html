@@ -56,91 +56,12 @@
   .note { padding: 10px 16px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
   .leaflet-popup-content { font: 13px/1.45 var(--font); }
   .leaflet-popup-content b { font-size: 14px; }
-  .pop a { color: #1d4ed8; font-weight: 700; }
-
-  .bridge-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+  .pop a { color: var(--accent); font-weight: 700; }
+  .leaflet-tooltip.bridge-tip {
+    background: var(--panel); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 8px; box-shadow: none; font: 600 12px/1.2 var(--font); padding: 3px 7px;
   }
-  .bridge-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    border: 1px solid var(--line);
-    background: var(--bg);
-    color: var(--fg);
-    font: 700 13px/1.2 var(--font);
-    cursor: pointer;
-    user-select: none;
-    box-sizing: border-box;
-    width: 100%;
-    transition: background .15s, border-color .15s, transform .1s;
-  }
-  .bridge-btn:hover { background: var(--panel); border-color: var(--muted); }
-  .bridge-btn:active { transform: scale(0.98); }
-  .bridge-btn input[type="checkbox"] {
-    cursor: pointer; width: 15px; height: 15px; accent-color: var(--accent); margin: 0;
-  }
-
-  .bridge-marker {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 3px 9px; border-radius: 999px;
-    font: 700 11.5px/1.2 var(--font); color: #0f172a; /* Четкий черный/темный текст */
-    white-space: nowrap; cursor: pointer; user-select: none;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
-    transition: transform .15s, box-shadow .15s;
-  }
-  .bridge-marker:hover {
-    transform: scale(1.07); box-shadow: 0 3px 9px rgba(0,0,0,0.2);
-    z-index: 1000 !important;
-  }
-  .bridge-marker .b-dot {
-    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-  }
-
-  /* Мягкие пастельные оттенки: не перекрывают черный текст */
-  .bridge-marker.closed, .bridge-marker.on-demand {
-    background: #ecfdf5; border: 1px solid #a7f3d0;
-  }
-  .bridge-marker.closed .b-dot, .bridge-marker.on-demand .b-dot {
-    background: #10b981;
-  }
-
-  .bridge-marker.drawn {
-    background: #fef2f2; border: 1px solid #fecaca;
-  }
-  .bridge-marker.drawn .b-dot {
-    background: #ef4444;
-  }
-
-  .bridge-marker.soon {
-    background: #fffbeb; border: 1px solid #fde68a;
-  }
-  .bridge-marker.soon .b-dot {
-    background: #f59e0b;
-  }
-
-  .bridge-marker.fixed {
-    background: #f8fafc; border: 1px solid #cbd5e1;
-  }
-  .bridge-marker.fixed .b-dot {
-    background: #64748b;
-  }
-  .bridge-div-icon { background: transparent; border: 0; }
-
-  @media (prefers-color-scheme: dark) {
-    .bridge-btn { background: #111d33; border-color: var(--line); color: var(--fg); }
-    .bridge-btn:hover { border-color: var(--muted); }
-    .bridge-marker { color: #f1f5f9; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
-    .bridge-marker.closed, .bridge-marker.on-demand { background: #064e3b55; border-color: #059669; }
-    .bridge-marker.drawn { background: #7f1d1d55; border-color: #dc2626; }
-    .bridge-marker.soon { background: #78350f55; border-color: #d97706; }
-    .bridge-marker.fixed { background: #1e293b; border-color: #475569; }
-  }
+  .leaflet-tooltip.bridge-tip.leaflet-tooltip-right::before { border-right-color: var(--line); }
   @media (max-width: 760px) {
     .app { grid-template-columns: 1fr; grid-template-rows: 45% 55%; }
     .panel { order: 2; border-right: 0; border-top: 1px solid var(--line); }
@@ -154,14 +75,10 @@
   <aside class="panel">
     <div class="head">
       <div class="brand"><h1>Разводка</h1><span>парковки Санкт-Петербурга</span></div>
-      <div class="bridge-actions">
-        <label class="bridge-btn" title="Показать или скрыть мосты на карте">
-          <input type="checkbox" id="toggle-bridges" checked>
-          <span>🌉 Мосты</span>
-        </label>
-        <button type="button" class="bridge-btn" id="zoom-bridges" title="Отдалить карту и показать все мосты района">
-          <span>🗺️ Обзор мостов</span>
-        </button>
+      <div class="row">
+        <span class="label">Мосты</span>
+        <button class="chip" type="button" id="toggle-bridges" aria-pressed="true">На карте</button>
+        <button class="chip" type="button" id="zoom-bridges">Все мосты</button>
       </div>
       <form id="search">
         <input id="addr" type="text" placeholder="Адрес, например Невский пр. 28 или Большой пр. П.С. 50" value="м. Петроградская" autocomplete="off">
@@ -184,7 +101,7 @@
       <div class="status" id="status">Введите адрес или кликните по карте</div>
     </div>
     <div class="list" id="list"></div>
-    <div class="note">Локальная выгрузка OpenStreetMap на 26.10.2026: 8 807 парковок Санкт-Петербурга. У части нет данных об оплате. Перед парковкой проверяйте знаки.</div>
+    <div class="note">OpenStreetMap на 26.10.2026: 8 807 парковок. В снимке нет Петергофа, Кронштадта, Сестрорецка, Пушкина и Колпино. У части точек нет данных об оплате. Перед парковкой проверяйте знаки.</div>
   </aside>
   <div id="map"></div>
 </div>
@@ -198,29 +115,30 @@ const COLORS = () => {
   return { free: s.getPropertyValue('--free').trim(), paid: s.getPropertyValue('--paid').trim(),
            unknown: s.getPropertyValue('--unknown').trim(), private: s.getPropertyValue('--private').trim() };
 };
-const STATUS_TEXT = { free: 'Бесплатно', paid: 'Платно', unknown: 'Оплата неизвестна', private: 'Закрытая / для своих' };
-const TYPE_TEXT = { surface: 'открытая площадка', 'multi-storey': 'многоуровневая', underground: 'подземная',
-  street_side: 'вдоль улицы', lane: 'на проезжей части', rooftop: 'на крыше', garage_boxes: 'гаражи', carports: 'навесы' };
+const STATUS_TEXT = { free: 'Бесплатно', paid: 'Платно', unknown: 'Оплата неизвестна', private: 'Закрытая' };
 const LOCATION_TEXT = {
-  street_side: '🛣️ Вдоль дороги / карман',
-  lane: '🛣️ На проезжей части',
-  surface: '🏡 Во дворе',
-  underground: '🏢 Подземный паркинг',
-  'multi-storey': '🏢 Многоуровневый паркинг',
-  rooftop: '🏢 На крыше',
-  garage_boxes: '🚪 Гаражи',
-  carports: '☂️ Навес'
+  street_side: 'Вдоль дороги', lane: 'На проезжей части', on_kerb: 'У бордюра',
+  half_on_kerb: 'Частично на проезжей части', shoulder: 'На обочине', surface: 'Открытая площадка',
+  underground: 'Подземный паркинг', 'multi-storey': 'Многоуровневый паркинг', rooftop: 'На крыше',
+  garage_boxes: 'Гаражи', carports: 'Навес', sheds: 'Навесы'
 };
+const CLOSED_ACCESS = {
+  private: 'Закрытая', no: 'Закрытая', customers: 'Закрытая, для клиентов', permit: 'Только по пропускам',
+  destination: 'Только для подъезда', employees: 'Для сотрудников', restricted: 'Ограниченный доступ'
+};
+const STREET_PARKING = new Set(['street_side', 'lane', 'on_kerb', 'half_on_kerb', 'shoulder']);
 
 function defaultName(t) {
-  if (t.parking === 'street_side' || t.parking === 'lane') return 'Парковка вдоль дороги';
+  if (STREET_PARKING.has(t.parking)) return 'Парковка вдоль дороги';
   if (t.parking === 'underground') return 'Подземный паркинг';
   if (t.parking === 'multi-storey') return 'Многоуровневый паркинг';
-  return 'Парковка во дворе';
+  if (t.parking === 'rooftop') return 'Парковка на крыше';
+  if (t.parking === 'surface') return 'Открытая парковка';
+  return 'Парковка';
 }
 
 const state = { radius: 500, filter: 'all', center: null, items: [], markers: new Map() };
-const BBOX = [59.63, 29.42, 60.25, 30.76]; // Границы города федерального значения Санкт-Петербург
+const BBOX = [59.78, 30.02, 60.09, 30.64]; // Фактический охват выгрузки, не административная граница города
 const PLACES = [
   ['м. Гостиный двор', 59.9343, 30.3351], ['м. Петроградская', 59.9664, 30.3115],
   ['м. Площадь Восстания', 59.9317, 30.3606], ['м. Василеостровская', 59.9427, 30.2782],
@@ -236,152 +154,70 @@ const layer = L.layerGroup().addTo(map);
 const bridgesLayer = L.layerGroup().addTo(map);
 let centerMarker = null, radiusCircle = null;
 
-function formatMins(m) {
-  const h = Math.floor(m / 60);
-  const min = m % 60;
-  if (h > 0) return `${h} ч ${min} мин`;
-  return `${min} мин`;
+const bridgeMarkers = new Map();
+
+function bridgeKind(bridge) {
+  if (bridge.type === 'regular') return 'Каждую ночь в навигацию';
+  if (bridge.type === 'on_demand') return 'Только по заявке судна';
+  return 'Не разводится';
 }
 
-function getBridgeStatus(bridge, now) {
-  // 1. Неразводные мосты (24/7)
-  if (bridge.type === 'fixed' || !bridge.schedule || bridge.schedule.length === 0) {
-    return {
-      isOpenForCars: true,
-      isDrawn: false,
-      text: '🟢 Круглосуточно открыт',
-      subtext: 'Мост неразводной, проезд 24/7',
-      badgeClass: 'fixed'
-    };
-  }
+function bridgeFill(bridgeStatus) {
+  const c = COLORS();
+  if (bridgeStatus.badgeClass === 'drawn') return c.paid;
+  if (bridgeStatus.badgeClass === 'soon') return c.private;
+  if (bridgeStatus.badgeClass === 'fixed') return c.unknown;
+  return c.free;
+}
 
-  // 2. Мосты через Большую Невку по предварительной спецзаявке
-  // В 99% ночей они НЕ разводятся и открыты для транспорта
-  if (bridge.type === 'on_demand') {
-    return {
-      isOpenForCars: true,
-      isDrawn: false,
-      text: '🟢 Обычно открыт всю ночь',
-      subtext: 'Разводка крайне редкая (только по спецзаявке судов)',
-      badgeClass: 'on-demand'
-    };
-  }
+function bridgeRadius() {
+  return map.getZoom() >= 13 ? 8 : 11;
+}
 
-  // 3. Зимний период (навигация закрыта)
-  const month = now.getMonth();
-  if (month < 3 || month > 10) {
-    return {
-      isOpenForCars: true,
-      isDrawn: false,
-      text: '🟢 Сведён (навигация закрыта)',
-      subtext: 'Зимой мосты не разводятся',
-      badgeClass: 'closed'
-    };
-  }
-
-  // 4. Регулярные разводные мосты (Троицкий, Биржевой, Тучков, Дворцовый)
-  const curMins = now.getHours() * 60 + now.getMinutes();
-
-  for (const [startStr, endStr] of bridge.schedule) {
-    const [sh, sm] = startStr.split(':').map(Number);
-    const [eh, em] = endStr.split(':').map(Number);
-    const startMins = sh * 60 + sm;
-    const endMins = eh * 60 + em;
-
-    if (curMins >= startMins && curMins < endMins) {
-      const left = endMins - curMins;
-      return {
-        isOpenForCars: false,
-        isDrawn: true,
-        text: '🔴 Разведён прямо сейчас',
-        subtext: `Проезд закрыт до ${endStr} (ещё ${formatMins(left)})`,
-        badgeClass: 'drawn'
-      };
-    }
-  }
-
-  let minDiff = Infinity;
-  let nextOpening = null;
-  for (const [startStr, endStr] of bridge.schedule) {
-    const [sh, sm] = startStr.split(':').map(Number);
-    let startMins = sh * 60 + sm;
-    if (startMins <= curMins) {
-      startMins += 24 * 60;
-    }
-    const diff = startMins - curMins;
-    if (diff < minDiff) {
-      minDiff = diff;
-      nextOpening = startStr;
-    }
-  }
-
-  const isSoon = minDiff <= 60;
+function bridgeLabelOptions() {
   return {
-    isOpenForCars: true,
-    isDrawn: false,
-    text: isSoon ? '⚠️ Скоро разводка' : '🟢 Сведён (проезд открыт)',
-    subtext: `Разводка в ${nextOpening} (через ${formatMins(minDiff)})`,
-    badgeClass: isSoon ? 'soon' : 'closed'
+    permanent: map.getZoom() >= 14,
+    direction: 'right',
+    offset: [10, 0],
+    className: 'bridge-tip',
+    opacity: 1
   };
 }
 
-function bridgePopupHtml(bridge, status) {
+function bridgePopupHtml(bridge, bridgeStatus) {
   const route = `https://yandex.ru/maps/?rtext=~${bridge.lat},${bridge.lon}&rtt=auto`;
-  const bg = status.isDrawn ? '#fef2f2' : (status.badgeClass === 'soon' ? '#fffbeb' : '#ecfdf5');
-  const fg = status.isDrawn ? '#991b1b' : (status.badgeClass === 'soon' ? '#92400e' : '#065f46');
-  const border = status.isDrawn ? '#fecaca' : (status.badgeClass === 'soon' ? '#fde68a' : '#a7f3d0');
-
-  let typeBadge = '';
-  if (bridge.type === 'regular') {
-    typeBadge = '<span style="font-size:11px;padding:2px 6px;border-radius:4px;background:#fee2e2;color:#991b1b;font-weight:700;">Каждую ночь</span>';
-  } else if (bridge.type === 'on_demand') {
-    typeBadge = '<span style="font-size:11px;padding:2px 6px;border-radius:4px;background:#e0f2fe;color:#0369a1;font-weight:700;">Почти всегда открыт</span>';
-  } else {
-    typeBadge = '<span style="font-size:11px;padding:2px 6px;border-radius:4px;background:#f3f4f6;color:#374151;font-weight:700;">24/7 не разводится</span>';
-  }
-
-  return `<div class="pop">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px;">
-      <b style="font-size:15px;">🌉 ${bridge.name}</b>
-      ${typeBadge}
-    </div>
-    <div style="padding:6px 10px;border-radius:8px;background:${bg};color:${fg};border:1px solid ${border};margin:6px 0 8px;font-size:12.5px;">
-      <b style="font-size:13px;">${status.text}</b><br>${status.subtext}
-    </div>
-    <div style="font-size:12.5px;line-height:1.45;">
-      Режим: <b>${bridge.scheduleText}</b><br>
-      <span style="color:var(--muted);">${bridge.connects}</span>
-    </div>
-    <div style="margin-top:8px;">
-      <a href="${route}" target="_blank" rel="noopener">Маршрут к мосту в Яндекс Картах →</a>
-    </div>
-  </div>`;
+  return `<div class="pop"><b>${bridge.name}</b><br>${bridgeStatus.text}. ${bridgeStatus.subtext}`
+    + `<br>График: ${bridge.scheduleText}<br>${bridgeKind(bridge)}. ${bridge.connects}`
+    + `<br><a href="${route}" target="_blank" rel="noopener">Маршрут в Яндекс Картах →</a></div>`;
 }
 
 function updateBridges() {
-  if (!window.BRIDGES) return;
-  bridgesLayer.clearLayers();
-  const checkbox = $('toggle-bridges');
-  if (checkbox && !checkbox.checked) return;
-
+  if (!window.BRIDGES || !window.getBridgeStatus) return;
+  if ($('toggle-bridges').getAttribute('aria-pressed') !== 'true') {
+    bridgesLayer.clearLayers();
+    bridgeMarkers.clear();
+    return;
+  }
   const now = new Date();
   window.BRIDGES.forEach(bridge => {
-    const status = getBridgeStatus(bridge, now);
-    const iconHtml = `<div class="bridge-marker ${status.badgeClass}">
-      <span class="b-dot"></span><span>${bridge.shortName || bridge.name}</span>
-    </div>`;
-
-    const icon = L.divIcon({
-      html: iconHtml,
-      className: 'bridge-div-icon',
-      iconSize: [null, null],
-      iconAnchor: [45, 14]
-    });
-
-    const popupContent = bridgePopupHtml(bridge, status);
-    const marker = L.marker([bridge.lat, bridge.lon], { icon, zIndexOffset: 500 });
-    marker.bindPopup(popupContent);
-    marker.addTo(bridgesLayer);
+    const bridgeStatus = window.getBridgeStatus(bridge, now);
+    const signature = [bridgeStatus.badgeClass, bridgeStatus.text, bridgeStatus.subtext].join('|');
+    const html = bridgePopupHtml(bridge, bridgeStatus);
+    let marker = bridgeMarkers.get(bridge.id);
+    if (!marker) {
+      marker = L.circleMarker([bridge.lat, bridge.lon], {
+        radius: bridgeRadius(), color: '#ffffff', weight: 2, fillColor: bridgeFill(bridgeStatus), fillOpacity: 1,
+        bubblingMouseEvents: false
+      });
+      marker.bindPopup(html);
+      marker.bindTooltip(bridge.shortName || bridge.name, bridgeLabelOptions());
+      marker.addTo(bridgesLayer);
+      bridgeMarkers.set(bridge.id, marker);
+    } else if (marker._sig !== signature) {
+      marker.setStyle({ fillColor: bridgeFill(bridgeStatus) });
+      marker.setPopupContent(html);
+    }
+    marker._sig = signature;
   });
 }
 
@@ -396,9 +232,9 @@ function haversine(a, b) {
 }
 
 function classify(t) {
-  if (['private', 'no', 'customers', 'permit'].includes(t.access)) return 'private';
+  if (CLOSED_ACCESS[t.access]) return 'private';
   if (t.fee === 'no') return 'free';
-  if (t.fee === 'yes' || t.fee === 'paid' || t.charge) return 'paid';
+  if (t.fee === 'yes' || t.fee === 'paid' || t.fee === 'interval' || t.charge) return 'paid';
   return 'unknown';
 }
 
@@ -414,11 +250,11 @@ async function geocode(q) {
   if (!data.length) throw new Error('Адрес не найден в Петербурге. Попробуйте написать иначе.');
   const g = { lat: +data[0].lat, lon: +data[0].lon, label: data[0].display_name.split(',').slice(0, 3).join(',') };
   if (g.lat < BBOX[0] || g.lat > BBOX[2] || g.lon < BBOX[1] || g.lon > BBOX[3])
-    throw new Error('Адрес вне Санкт-Петербурга. Поиск работает по территории города.');
+    throw new Error('Адрес вне выгрузки. Петергоф, Кронштадт, Сестрорецк, Пушкин и Колпино в снимок не входят.');
   return g;
 }
 
-// Parkings come from the local parkings.js snapshot (OSM, Petrogradsky district)
+// Local OSM snapshot in parkings.js, dated 26.10.2026. Coverage is BBOX, not the whole city.
 async function fetchParkings(lat, lon, r) {
   if (!window.PARKINGS) throw new Error('Не загрузился файл parkings.js рядом со страницей.');
   return window.PARKINGS.map(t => ({
@@ -430,13 +266,8 @@ async function fetchParkings(lat, lon, r) {
 
 function details(p) {
   const t = p.tags;
-  const loc = LOCATION_TEXT[t.parking] || '🏡 Во дворе';
-  let statusText = STATUS_TEXT[p.status];
-  if (t.access === 'customers') {
-    statusText = 'Закрытая (для клиентов)';
-  } else if (t.access === 'permit') {
-    statusText = 'Только по пропускам';
-  }
+  const loc = LOCATION_TEXT[t.parking] || (t.parking ? 'Парковка' : 'Тип не указан');
+  const statusText = CLOSED_ACCESS[t.access] || STATUS_TEXT[p.status];
   const parts = [statusText, loc];
   if (t.capacity) parts.push(t.capacity + ' мест');
   if (t.maxstay) parts.push('макс. ' + t.maxstay);
@@ -538,24 +369,28 @@ PLACES.forEach(([name, lat, lon]) => {
   $('places').appendChild(b);
 });
 
-searchAt(PLACES[0][1], PLACES[0][2], PLACES[0][0]);
+const startPlace = PLACES.find(([name]) => name === $('addr').value) || PLACES[0];
+searchAt(startPlace[1], startPlace[2], startPlace[0]);
 updateBridges();
+map.on('zoomend', () => {
+  bridgeMarkers.forEach((marker, id) => {
+    const bridge = window.BRIDGES.find(item => item.id === id);
+    marker.setRadius(bridgeRadius());
+    if (bridge) marker.unbindTooltip().bindTooltip(bridge.shortName || bridge.name, bridgeLabelOptions());
+  });
+});
 setInterval(updateBridges, 30000);
-$('toggle-bridges')?.addEventListener('change', () => {
+$('toggle-bridges').addEventListener('click', () => {
+  const button = $('toggle-bridges');
+  const shown = button.getAttribute('aria-pressed') === 'true';
+  button.setAttribute('aria-pressed', shown ? 'false' : 'true');
   updateBridges();
 });
-$('zoom-bridges')?.addEventListener('click', () => {
-  const cb = $('toggle-bridges');
-  if (cb && !cb.checked) {
-    cb.checked = true;
-  }
+$('zoom-bridges').addEventListener('click', () => {
+  const button = $('toggle-bridges');
+  if (button.getAttribute('aria-pressed') !== 'true') button.setAttribute('aria-pressed', 'true');
   updateBridges();
-  if (bridgesLayer.getLayers().length > 0) {
-    const group = L.featureGroup(bridgesLayer.getLayers());
-    map.fitBounds(group.getBounds().pad(0.08));
-  } else {
-    map.setView([59.9350, 30.3400], 12);
-  }
+  if (bridgeMarkers.size) map.fitBounds(L.featureGroup([...bridgeMarkers.values()]).getBounds().pad(0.12));
 });
 </script>
 </body>
