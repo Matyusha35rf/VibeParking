@@ -14,7 +14,8 @@ test('Dalnevostochny is one continuous curb rule', () => {
   assert.equal(avenue.ban.weekday, 'Sat');
   assert.equal(avenue.ban.from, 7 * 60);
   assert.equal(avenue.ban.to, 22 * 60);
-  assert.ok(avenue.lines.length > 10);
+  assert.ok(avenue.lines.length > 40);
+  assert.equal(avenue.lines.filter(part => part.oneway).length > 40, true);
 });
 
 test('parking is banned only on Saturday from 07:00 to 22:00 Moscow', () => {

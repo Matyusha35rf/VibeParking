@@ -258,10 +258,38 @@ async function geocode(q) {
   return g;
 }
 
+function shiftLine(line, meters) {
+  const dirs = [];
+  for (let i = 0; i < line.length - 1; i++) {
+    const north = (line[i + 1][0] - line[i][0]) * 111320;
+    const east = (line[i + 1][1] - line[i][1]) * 111320 * Math.cos(line[i][0] * Math.PI / 180);
+    const len = Math.hypot(east, north) || 1;
+    dirs.push([east / len, north / len]);
+  }
+  return line.map((point, i) => {
+    const a = dirs[Math.max(0, i - 1)], b = dirs[Math.min(dirs.length - 1, i)];
+    let east = a[0] + b[0], north = a[1] + b[1];
+    const len = Math.hypot(east, north) || 1;
+    east /= len; north /= len;
+    return [
+      point[0] + (-east * meters) / 111320,
+      point[1] + (north * meters) / (111320 * Math.cos(point[0] * Math.PI / 180))
+    ];
+  });
+}
+
+function curbLines(street) {
+  return street.lines.flatMap(part => {
+    const line = part.line || part;
+    if (part.oneway === false) return [shiftLine(line, 8), shiftLine(line, -8)];
+    return [shiftLine(line, 8)];
+  });
+}
+
 function nearestOnStreet(lat, lon, street) {
   const cos = Math.cos(lat * Math.PI / 180);
   let best = { dist: Infinity, lat, lon };
-  street.lines.forEach(line => {
+  curbLines(street).forEach(line => {
     for (let i = 1; i < line.length; i++) {
       const a = line[i - 1], b = line[i];
       const ax = (a[1] - lon) * 111320 * cos, ay = (a[0] - lat) * 111320;
@@ -283,13 +311,13 @@ function drawStreetParking() {
   window.STREET_PARKING.forEach(street => {
     const live = window.streetParkingStatus(street);
     const group = L.featureGroup();
-    street.lines.forEach(line => {
+    curbLines(street).forEach(line => {
       L.polyline(line, {
         color: live.allowed ? '#15803d' : '#b45309',
-        weight: 6, opacity: 0.8, lineCap: 'round', bubblingMouseEvents: false
+        weight: 5, opacity: 0.85, lineCap: 'round', bubblingMouseEvents: false
       }).addTo(group);
     });
-    group.bindPopup(`<div class="pop"><b>${street.name}</b><br>${live.text}<br>${live.detail}<br>Вдоль проезжей части</div>`);
+    group.bindPopup(`<div class="pop"><b>${street.name}</b><br>${live.text}<br>${live.detail}<br>По обеим сторонам проспекта</div>`);
     group.addTo(streetLayer);
     streetLayers.set(street.id, group);
   });
@@ -319,7 +347,7 @@ function details(p) {
   const t = p.tags;
   if (p.street) {
     const live = window.streetParkingStatus(p.street);
-    return [live.text, 'Вдоль дороги', live.detail].join(' · ');
+    return [live.text, 'По обеим сторонам', live.detail].join(' · ');
   }
   const loc = LOCATION_TEXT[t.parking] || (t.parking ? 'Парковка' : 'Тип не указан');
   const statusText = CLOSED_ACCESS[t.access] || STATUS_TEXT[p.status];
