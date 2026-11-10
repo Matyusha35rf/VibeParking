@@ -79,6 +79,7 @@
         <span class="label">Мосты</span>
         <button class="chip" type="button" id="toggle-bridges" aria-pressed="true">На карте</button>
         <button class="chip" type="button" id="zoom-bridges">Все мосты</button>
+        <button class="chip" type="button" id="toggle-signs" aria-pressed="true">Знаки 3.27</button>
       </div>
       <form id="search">
         <input id="addr" type="text" placeholder="Адрес, например Невский пр. 28 или Большой пр. П.С. 50" value="м. Петроградская" autocomplete="off">
@@ -101,7 +102,7 @@
       <div class="status" id="status">Введите адрес или кликните по карте</div>
     </div>
     <div class="list" id="list"></div>
-    <div class="note">Точки — выгрузка OSM на 26.10.2026, 8 807 площадок. Стоянка у края проезжей части в неё почти не входит: вдоль Дальневосточного проспекта она показана линией, кроме субботы с 7:00 до 22:00. Перед парковкой проверяйте знаки.</div>
+    <div class="note">Точки — выгрузка OSM на 26.10.2026, 8 807 площадок. Серые и красные линии — знак 3.27 на правом берегу Невского района по перечню Автопарка №7 (июль 2024): красная линия значит, что запрет действует сейчас. Левый берег района в перечень не входит. Перед парковкой проверяйте знаки.</div>
   </aside>
   <div id="map"></div>
 </div>
@@ -258,38 +259,18 @@ async function geocode(q) {
   return g;
 }
 
-function shiftLine(line, meters) {
-  const dirs = [];
-  for (let i = 0; i < line.length - 1; i++) {
-    const north = (line[i + 1][0] - line[i][0]) * 111320;
-    const east = (line[i + 1][1] - line[i][1]) * 111320 * Math.cos(line[i][0] * Math.PI / 180);
-    const len = Math.hypot(east, north) || 1;
-    dirs.push([east / len, north / len]);
-  }
-  return line.map((point, i) => {
-    const a = dirs[Math.max(0, i - 1)], b = dirs[Math.min(dirs.length - 1, i)];
-    let east = a[0] + b[0], north = a[1] + b[1];
-    const len = Math.hypot(east, north) || 1;
-    east /= len; north /= len;
-    return [
-      point[0] + (-east * meters) / 111320,
-      point[1] + (north * meters) / (111320 * Math.cos(point[0] * Math.PI / 180))
-    ];
-  });
+function streetLines(street) {
+  return street.line ? [street.line] : [];
 }
 
-function curbLines(street) {
-  return street.lines.flatMap(part => {
-    const line = part.line || part;
-    if (part.oneway === false) return [shiftLine(line, 8), shiftLine(line, -8)];
-    return [shiftLine(line, 8)];
-  });
+function esc(value) {
+  return String(value == null ? '' : value).replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
 }
 
 function nearestOnStreet(lat, lon, street) {
   const cos = Math.cos(lat * Math.PI / 180);
   let best = { dist: Infinity, lat, lon };
-  curbLines(street).forEach(line => {
+  streetLines(street).forEach(line => {
     for (let i = 1; i < line.length; i++) {
       const a = line[i - 1], b = line[i];
       const ax = (a[1] - lon) * 111320 * cos, ay = (a[0] - lat) * 111320;
@@ -304,20 +285,34 @@ function nearestOnStreet(lat, lon, street) {
   return best;
 }
 
+function signPopup(street, live) {
+  const source = window.STREET_PARKING_SOURCE;
+  const approx = street.approx ? '<br>Линия участка приблизительная: боковой проезд или съезд в OSM может не совпадать со знаком.' : '';
+  const link = source ? `<br><a href="${esc(source.url)}" target="_blank" rel="noopener">${esc(source.publisher)}</a>` : '';
+  return `<div class="pop"><b>${esc(street.name)}</b><br>${esc(live.text)}<br>${esc(live.detail)}${approx}${link}</div>`;
+}
+
 function drawStreetParking() {
   if (!window.STREET_PARKING || !window.streetParkingStatus) return;
   streetLayer.clearLayers();
   streetLayers.clear();
+  if ($('toggle-signs').getAttribute('aria-pressed') !== 'true') {
+    if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
+    return;
+  }
   window.STREET_PARKING.forEach(street => {
     const live = window.streetParkingStatus(street);
     const group = L.featureGroup();
-    curbLines(street).forEach(line => {
+    streetLines(street).forEach(line => {
       L.polyline(line, {
-        color: live.allowed ? '#15803d' : '#b45309',
-        weight: 5, opacity: 0.85, lineCap: 'round', bubblingMouseEvents: false
+        color: live.active ? '#b91c1c' : '#64748b',
+        weight: live.active ? 5 : 4,
+        opacity: live.active ? 0.92 : 0.72,
+        lineCap: 'round',
+        bubblingMouseEvents: false
       }).addTo(group);
     });
-    group.bindPopup(`<div class="pop"><b>${street.name}</b><br>${live.text}<br>${live.detail}<br>По обеим сторонам проспекта</div>`);
+    group.bindPopup(signPopup(street, live));
     group.addTo(streetLayer);
     streetLayers.set(street.id, group);
   });
@@ -332,14 +327,15 @@ async function fetchParkings(lat, lon, r) {
     name: t.name || t.addr || defaultName(t),
     dist: haversine([lat, lon], [t.lat, t.lon])
   })).filter(p => p.dist <= r);
-  const streets = (window.STREET_PARKING || []).map(street => {
+  const signsOn = $('toggle-signs').getAttribute('aria-pressed') === 'true';
+  const streets = signsOn ? (window.STREET_PARKING || []).map(street => {
     const near = nearestOnStreet(lat, lon, street);
     return {
       id: 'street:' + street.id, lat: near.lat, lon: near.lon, street,
-      tags: { parking: 'street_side', fee: 'no' }, status: 'free',
-      name: street.name, dist: near.dist
+      tags: { parking: 'street_side' }, status: 'sign',
+      name: street.name + ', ' + street.side, dist: near.dist
     };
-  }).filter(p => p.dist <= r);
+  }).filter(p => p.dist <= r) : [];
   return points.concat(streets).sort((a, b) => a.dist - b.dist);
 }
 
@@ -347,7 +343,7 @@ function details(p) {
   const t = p.tags;
   if (p.street) {
     const live = window.streetParkingStatus(p.street);
-    return [live.text, 'По обеим сторонам', live.detail].join(' · ');
+    return [live.text, p.street.side, p.street.when].join(' · ');
   }
   const loc = LOCATION_TEXT[t.parking] || (t.parking ? 'Парковка' : 'Тип не указан');
   const statusText = CLOSED_ACCESS[t.access] || STATUS_TEXT[p.status];
@@ -373,7 +369,7 @@ function render() {
   layer.clearLayers(); state.markers.clear();
   const shown = state.items.filter(p => state.filter === 'all' || p.status === state.filter);
   const counts = { free: 0, paid: 0, unknown: 0, private: 0 };
-  state.items.forEach(p => counts[p.status]++);
+  state.items.forEach(p => { if (counts[p.status] != null) counts[p.status]++; });
   $('summary').innerHTML = state.items.length ? ['free', 'paid', 'unknown', 'private'].map(k =>
     `<span><i class="dot" style="background:${c[k]}"></i><b>${counts[k]}</b> ${{ free: 'бесплатных', paid: 'платных', unknown: 'неизвестно', private: 'закрытых' }[k]}</span>`).join('') : '';
 
@@ -393,7 +389,7 @@ function render() {
     const el = document.createElement('div');
     el.className = 'item'; el.dataset.id = p.id;
     const live = p.street ? window.streetParkingStatus(p.street) : null;
-    const bar = live && !live.allowed ? c.private : c[p.status];
+    const bar = live ? (live.active ? '#b91c1c' : '#64748b') : c[p.status];
     el.innerHTML = `<div class="bar" style="background:${bar}"></div>
       <div><h3></h3><p>${details(p)}</p></div>
       <div class="dist">${fmtDist(p.dist)}<small>${Math.max(1, Math.round(p.dist / 80))} мин</small></div>`;
@@ -427,7 +423,12 @@ async function searchAt(lat, lon, label) {
   try { items = await fetchParkings(lat, lon, state.radius); } catch (e) { error = e.message; }
   if (token !== state.token) return; // a newer search started meanwhile
   state.items = items; state.error = error;
-  setStatus(error || `${label ? label + ' · ' : ''}найдено ${items.length} парковок в радиусе ${fmtDist(state.radius)}`);
+  const signCount = items.filter(p => p.status === 'sign').length;
+  const lotCount = items.length - signCount;
+  const found = signCount
+    ? `${lotCount} парковок и ${signCount} участков со знаком 3.27`
+    : `${lotCount} парковок`;
+  setStatus(error || `${label ? label + ' · ' : ''}${found} в радиусе ${fmtDist(state.radius)}`);
   render();
 }
 
@@ -477,6 +478,13 @@ map.on('zoomend', () => {
   });
 });
 setInterval(() => { updateBridges(); drawStreetParking(); }, 30000);
+$('toggle-signs').addEventListener('click', () => {
+  const button = $('toggle-signs');
+  const shown = button.getAttribute('aria-pressed') === 'true';
+  button.setAttribute('aria-pressed', shown ? 'false' : 'true');
+  drawStreetParking();
+  if (state.center) searchAt(state.center.lat, state.center.lon, state.center.label);
+});
 $('toggle-bridges').addEventListener('click', () => {
   const button = $('toggle-bridges');
   const shown = button.getAttribute('aria-pressed') === 'true';
